@@ -1,0 +1,3 @@
+build ${builddir}/util/error_handling.o: CXX util/error_handling.cc
+build ${builddir}/util/file_descriptor.o: CXX util/file_descriptor.cc
+build lib/libutil.a: AR ${builddir}/util/error_handling.o ${builddir}/util/file_descriptor.o

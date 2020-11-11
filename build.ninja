@@ -1,0 +1,33 @@
+CXXFLAGS = -I. -std=c++2a -Wall -Wextra -O3 -march=native
+
+builddir = .build
+
+rule CXX
+  description = CXX $in
+  depfile     = $out.d
+  command     = g++ -MD -MF $out.d -x c++ $CXXFLAGS -c $in -o $out
+
+rule LINK
+  description = LINK $out
+  command     = g++ $CXXFLAGS $objects -o $out $libs
+
+rule AR
+  description = AR $out
+  command     = ar rcv $out $in
+
+rule RAGEL
+  description = RAGEL $in
+  command     = ragel -C $in -o $out
+
+#build json.cc: RAGEL json.rl
+
+build ${builddir}/main.o: CXX main.cc
+#build ${builddir}/json.o: CXX json.cc
+#build ${builddir}/data_visitor.o: CXX data_visitor.cc
+
+include util/build.ninja
+include serial/build.ninja
+
+build bin/stub: LINK ${builddir}/main.o lib/libutil.a lib/libserial.a
+  objects = ${builddir}/main.o
+  libs = -L lib -lserial -lutil

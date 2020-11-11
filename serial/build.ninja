@@ -1,0 +1,4 @@
+build serial/json.cc: RAGEL serial/json.rl
+build ${builddir}/serial/json.o: CXX  serial/json.cc
+build ${builddir}/serial/data_visitor.o: CXX serial/data_visitor.cc
+build lib/libserial.a: AR ${builddir}/serial/json.o ${builddir}/serial/data_visitor.o
