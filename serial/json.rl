@@ -12,6 +12,8 @@
 #include "util/error_handling.h"
 #include "util/file_descriptor.h"
 
+namespace serial::json {
+
 inline uint8_t from_hexchar(char c)
 {
 	uint8_t rc = 0;
@@ -33,15 +35,18 @@ inline void to_utf8(char32_t codoepoint, std::string & destination)
 		destination.push_back(codoepoint);
 	} else if (codoepoint < 0x800)
 	{
-		destination.push_back( 0xc0 | ( (codoepoint >> 6) & 0x1f ) );
-		destination.push_back( 0x80 | (codoepoint & 0x3f) );
+		destination.reserve(2);
+		destination.push_back( 0xc0 | ( (codoepoint >>  6) & 0x1f ) );
+		destination.push_back( 0x80 | ( (codoepoint >>  0) & 0x3f ) );
 	} else if (codoepoint < 0x10000)
 	{
+		destination.reserve(3);
 		destination.push_back( 0xe0 | ( (codoepoint >> 12) & 0x0f ) );
-		destination.push_back( 0x80 | ( (codoepoint >> 6) & 0x3f ) );
-		destination.push_back( 0x80 | (codoepoint & 0x3f) );
+		destination.push_back( 0x80 | ( (codoepoint >>  6) & 0x3f ) );
+		destination.push_back( 0x80 | ( (codoepoint >>  0) & 0x3f ) );
 	} else if (codoepoint < 0x110000)
 	{
+		destination.reserve(4);
 		destination.push_back( 0xf0 | ( (codoepoint >> 18) & 0x07 ) );
 		destination.push_back( 0x80 | ( (codoepoint >> 12) & 0x3f ) );
 		destination.push_back( 0x80 | ( (codoepoint >>  6) & 0x3f ) );
@@ -343,8 +348,6 @@ inline void to_utf8(char32_t codoepoint, std::string & destination)
 	);
 }%%
 
-namespace serial::json {
-
 %%write data;
 
 parser::parser()
@@ -410,4 +413,4 @@ void parser::parse_data(const char * buffer, size_t n, data_visitor & data)
 	}
 }
 
-}
+} // namespacee serial::json
