@@ -19,11 +19,8 @@ rule RAGEL
   description = RAGEL $in
   command     = ragel -C $in -o $out
 
-#build json.cc: RAGEL json.rl
-
 build ${builddir}/main.o: CXX main.cc
-#build ${builddir}/json.o: CXX json.cc
-#build ${builddir}/data_visitor.o: CXX data_visitor.cc
+build ${builddir}/fptest.o: CXX fptest.cc
 
 include util/build.ninja
 include serial/build.ninja
@@ -31,3 +28,7 @@ include serial/build.ninja
 build bin/stub: LINK ${builddir}/main.o lib/libutil.a lib/libserial.a
   objects = ${builddir}/main.o
   libs = -L lib -lserial -lutil
+
+build bin/fptest: LINK ${builddir}/fptest.o lib/libutil.a
+  objects = ${builddir}/fptest.o
+  libs = -L lib -lutil
