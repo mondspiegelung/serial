@@ -55,6 +55,13 @@
 #define signmask  0x8000000000000000U
 #define expbias   (1023 + 52)
 
+#ifndef likely
+#define likely(pred) __builtin_expect(!!(pred), 1)
+#endif
+#ifndef unlikely
+#define unlikely(pred) __builtin_expect(!!(pred), 0)
+#endif
+
 namespace util {
 
 static constexpr uint64_t tens[] = {
@@ -99,11 +106,11 @@ struct decomposed
 		exp = (bits & expmask) >> 52;
 		negative = bits & signmask;
 
-		if (exp == 0)
+		if (unlikely(exp == 0))
 		{
 			exp = -expbias + 1;
 			is_zero = (mantissa == 0);
-		} else if (exp == (expmask >> 52))
+		} else if (unlikely(exp == (expmask >> 52)))
 		{
 			if (mantissa)
 				is_nan = true;
@@ -115,18 +122,6 @@ struct decomposed
 			exp -= expbias;
 			is_zero = false;
 		}
-#if 0
-		if (exp)
-		{
-			mantissa += hiddenbit;
-			exp -= expbias;
-			is_zero = false;
-
-		} else
-		{
-			exp = -expbias + 1;
-		}
-#endif
 	}
 
 	std::array<decomposed, 2> clamp()
@@ -217,6 +212,25 @@ static decomposed find_cachedpow10(int exp, int* k)
     int approx = -(exp + npowers) * one_log_ten;
     int idx = (approx - firstpower) / steppowers;
 
+#if 1
+	int current = exp + powers_ten[idx].exp + 64;
+
+    while (current < expmin)
+	{
+		++idx;
+		current = exp + powers_ten[idx].exp + 64;
+	}
+
+	while (current > expmax)
+	{
+		--idx;
+		current = exp + powers_ten[idx].exp + 64;
+	}
+
+	*k = (firstpower + idx * steppowers);
+
+	return powers_ten[idx];
+#else
     while(1) {
         int current = exp + powers_ten[idx].exp + 64;
 
@@ -234,27 +248,38 @@ static decomposed find_cachedpow10(int exp, int* k)
 
         return powers_ten[idx];
     }
+#endif
 }
 
-static decomposed multiply(const decomposed* a, const decomposed* b)
+typedef unsigned __int128 uint128_t;
+
+static decomposed multiply(const decomposed & a, const decomposed & b)
 {
+#if 0
     static constexpr uint64_t lomask = 0x00000000FFFFFFFF;
 
-    uint64_t ah_bl = (a->mantissa >> 32)    * (b->mantissa & lomask);
-    uint64_t al_bh = (a->mantissa & lomask) * (b->mantissa >> 32);
-    uint64_t al_bl = (a->mantissa & lomask) * (b->mantissa & lomask);
-    uint64_t ah_bh = (a->mantissa >> 32)    * (b->mantissa >> 32);
+    uint64_t ah_bl = (a.mantissa >> 32)    * (b.mantissa & lomask);
+    uint64_t al_bh = (a.mantissa & lomask) * (b.mantissa >> 32);
+    uint64_t al_bl = (a.mantissa & lomask) * (b.mantissa & lomask);
+    uint64_t ah_bh = (a.mantissa >> 32)    * (b.mantissa >> 32);
 
     uint64_t tmp = (ah_bl & lomask) + (al_bh & lomask) + (al_bl >> 32); 
     /* round up */
     tmp += 1U << 31;
 
-    decomposed fp = {
+    return decomposed{
         ah_bh + (ah_bl >> 32) + (al_bh >> 32) + (tmp >> 32),
-        a->exp + b->exp + 64
+        a.exp + b.exp + 64
     };
+#else
+	uint128_t p = static_cast<uint128_t>(a.mantissa)
+	            * static_cast<uint128_t>(b.mantissa);
+	uint64_t h = p >> 64;
+	uint64_t l = static_cast<uint64_t>(p);
+	if (l & (uint64_t(1) << 63)) ++h;
 
-    return fp;
+	return decomposed(h, a.exp + b.exp + 64);
+#endif
 }
 
 static void round_digit(char* digits, int ndigits, uint64_t delta, uint64_t rem, uint64_t kappa, uint64_t frac)
@@ -267,26 +292,28 @@ static void round_digit(char* digits, int ndigits, uint64_t delta, uint64_t rem,
     }
 }
 
-static int generate_digits(const decomposed* fp, decomposed* upper, decomposed* lower, char* digits, int* K)
+static int generate_digits(const decomposed & fp, const decomposed & upper, const decomposed & lower, char* digits, int* K)
 {
-    uint64_t wfrac = upper->mantissa - fp->mantissa;
-    uint64_t delta = upper->mantissa - lower->mantissa;
+    uint64_t wfrac = upper.mantissa - fp.mantissa;
+    uint64_t delta = upper.mantissa - lower.mantissa;
 
-    decomposed one(1ULL << -upper->exp, upper->exp);
+    decomposed one(1ULL << -upper.exp, upper.exp);
 
-    uint64_t part1 = upper->mantissa >> -one.exp;
-    uint64_t part2 = upper->mantissa & (one.mantissa - 1);
+    uint64_t part1 = upper.mantissa >> -one.exp;
+    uint64_t part2 = upper.mantissa & (one.mantissa - 1);
+
+	static constexpr char ascii_digits[] = "0123456789";
 
     int idx = 0, kappa = 10;
     const uint64_t* divp;
-    /* 1000000000 */
+
     for(divp = tens + 10; kappa > 0; divp++) {
 
         uint64_t div = *divp;
         unsigned digit = part1 / div;
 
         if (digit || idx) {
-            digits[idx++] = digit + '0';
+            digits[idx++] = ascii_digits[digit];
         }
 
         part1 -= digit * div;
@@ -303,7 +330,6 @@ static int generate_digits(const decomposed* fp, decomposed* upper, decomposed* 
 
     /* 10 */
     const uint64_t* unit = tens + 18;
-
     while(true) {
         part2 *= 10;
         delta *= 10;
@@ -311,7 +337,7 @@ static int generate_digits(const decomposed* fp, decomposed* upper, decomposed* 
 
         unsigned digit = part2 >> -one.exp;
         if (digit || idx) {
-            digits[idx++] = digit + '0';
+            digits[idx++] = ascii_digits[digit]; // digit + '0';
         }
 
         part2 &= one.mantissa - 1;
@@ -336,9 +362,9 @@ static int grisu2(decomposed & v, char* digits, int* K)
     int k;
     decomposed cp = find_cachedpow10(upper.exp, &k);
 
-    w     = multiply(&w,     &cp);
-    upper = multiply(&upper, &cp);
-    lower = multiply(&lower, &cp);
+    w     = multiply(w,     cp);
+    upper = multiply(upper, cp);
+    lower = multiply(lower, cp);
 
     lower.mantissa++;
     upper.mantissa--;
@@ -347,7 +373,7 @@ static int grisu2(decomposed & v, char* digits, int* K)
 
 	v.mantissa = w.mantissa;
 	v.exp = w.exp;
-    return generate_digits(&v, &upper, &lower, digits, K);
+    return generate_digits(v, upper, lower, digits, K);
 }
 
 static int emit_digits(char* digits, int ndigits, char* dest, int K, bool neg)
@@ -432,15 +458,15 @@ int fp_convert(double d, char * dest)
 
 	dest[0] = '-';
 
-	if (value.is_nan)
+	if (unlikely(value.is_nan))
 	{
 		memcpy(dest, "NaN", 3);
 		return 3;
-	} else if (value.is_infinite)
+	} else if (unlikely(value.is_infinite))
 	{
 		memcpy(dest + value.negative, "Inf", 3);
 		return 3 + value.negative;
-	} else if (value.is_zero)
+	} else if (unlikely(value.is_zero))
 	{
 		dest[value.negative] = '0';
 		return 1 + value.negative;
