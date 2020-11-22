@@ -86,9 +86,9 @@ struct decomposed
 
  public:
 	// TODO: detect zero and nan
-	constexpr decomposed(uint64_t m, int32_t e, bool s = false,
-	                     bool n = false, bool i = false, bool z = false)
-	  : mantissa(m), exp(e), negative(s), is_nan(n), is_infinite(i), is_zero(z)
+	constexpr decomposed(uint64_t m, int32_t e, bool s = false)
+	  : mantissa(m), exp(e), negative(s)
+	  , is_nan(false), is_infinite(false), is_zero(false)
 	{ }
 
 	decomposed(double d) : decomposed()
@@ -97,7 +97,25 @@ struct decomposed
 
 		mantissa = bits & fracmask;
 		exp = (bits & expmask) >> 52;
+		negative = bits & signmask;
 
+		if (exp == 0)
+		{
+			exp = -expbias + 1;
+			is_zero = (mantissa == 0);
+		} else if (exp == (expmask >> 52))
+		{
+			if (mantissa)
+				is_nan = true;
+			else
+				is_infinite = true;
+		} else
+		{
+			mantissa += hiddenbit;
+			exp -= expbias;
+			is_zero = false;
+		}
+#if 0
 		if (exp)
 		{
 			mantissa += hiddenbit;
@@ -108,6 +126,7 @@ struct decomposed
 		{
 			exp = -expbias + 1;
 		}
+#endif
 	}
 
 	std::array<decomposed, 2> clamp()
@@ -307,10 +326,8 @@ static int generate_digits(decomposed* fp, decomposed* upper, decomposed* lower,
     }
 }
 
-static int grisu2(double d, char* digits, int* K)
+static int grisu2(decomposed & w, char* digits, int* K)
 {
-    decomposed w(d);
-
 	auto [lower, upper] = w.clamp();
 
 	w.normalize();
@@ -403,54 +420,33 @@ static int emit_digits(char* digits, int ndigits, char* dest, int K, bool neg)
     return idx;
 }
 
-static int filter_special(double fp, char* dest)
-{
-    if(fp == 0.0) {
-        dest[0] = '0';
-        return 1;
-    }
-
-    uint64_t bits = to_bits(fp);
-
-    bool nan = (bits & expmask) == expmask;
-
-    if (!nan) {
-        return 0;
-    }
-
-    if (bits & fracmask) {
-        dest[0] = 'n'; dest[1] = 'a'; dest[2] = 'n';
-
-    } else {
-        dest[0] = 'i'; dest[1] = 'n'; dest[2] = 'f';
-    }
-
-    return 3;
-}
-
 int fp_convert(double d, char * dest)
 {
     char digits[18];
-
     int str_len = 0;
-    bool neg = false;
 
-    if (to_bits(d) & signmask) {
-        dest[0] = '-';
-        str_len++;
-        neg = true;
-    }
+	decomposed value(d);
 
-    int spec = filter_special(d, dest + str_len);
+	dest[0] = '-';
 
-    if(spec) {
-        return str_len + spec;
-    }
+	if (value.is_nan)
+	{
+		memcpy(dest, "NaN", 3);
+		return 3;
+	} else if (value.is_infinite)
+	{
+		memcpy(dest + value.negative, "Inf", 3);
+		return 3 + value.negative;
+	} else if (value.is_zero)
+	{
+		dest[value.negative] = '0';
+		return 1 + value.negative;
+	}
 
     int K = 0;
-    int ndigits = grisu2(d, digits, &K);
+    int ndigits = grisu2(value, digits, &K);
 
-    str_len += emit_digits(digits, ndigits, dest + str_len, K, neg);
+    str_len += emit_digits(digits, ndigits, dest + str_len, K, value.negative);
 
     return str_len;
 }

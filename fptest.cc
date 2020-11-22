@@ -27,7 +27,7 @@ int main()
 
 		result[n] = '\0';
 
-		printf("%20g %20s\n", v, result);
+		printf("%20g %20s (%u)\n", v, result, n);
 	}
 
 	return 0;
