@@ -267,7 +267,7 @@ static void round_digit(char* digits, int ndigits, uint64_t delta, uint64_t rem,
     }
 }
 
-static int generate_digits(decomposed* fp, decomposed* upper, decomposed* lower, char* digits, int* K)
+static int generate_digits(const decomposed* fp, decomposed* upper, decomposed* lower, char* digits, int* K)
 {
     uint64_t wfrac = upper->mantissa - fp->mantissa;
     uint64_t delta = upper->mantissa - lower->mantissa;
@@ -326,8 +326,9 @@ static int generate_digits(decomposed* fp, decomposed* upper, decomposed* lower,
     }
 }
 
-static int grisu2(decomposed & w, char* digits, int* K)
+static int grisu2(decomposed & v, char* digits, int* K)
 {
+	decomposed w(v.mantissa, v.exp);
 	auto [lower, upper] = w.clamp();
 
 	w.normalize();
@@ -344,7 +345,9 @@ static int grisu2(decomposed & w, char* digits, int* K)
 
     *K = -k;
 
-    return generate_digits(&w, &upper, &lower, digits, K);
+	v.mantissa = w.mantissa;
+	v.exp = w.exp;
+    return generate_digits(&v, &upper, &lower, digits, K);
 }
 
 static int emit_digits(char* digits, int ndigits, char* dest, int K, bool neg)
@@ -443,12 +446,13 @@ int fp_convert(double d, char * dest)
 		return 1 + value.negative;
 	}
 
+
     int K = 0;
     int ndigits = grisu2(value, digits, &K);
 
-    str_len += emit_digits(digits, ndigits, dest + str_len, K, value.negative);
+    str_len += emit_digits(digits, ndigits, dest + value.negative, K, value.negative);
 
-    return str_len;
+    return str_len + value.negative;
 }
 
 } // namespace util
