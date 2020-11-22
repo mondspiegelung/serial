@@ -1,11 +1,12 @@
-CXXFLAGS = -I. -std=c++2a -Wall -Wextra -O3 -march=native
+INCLUDES = -I.
+CXXFLAGS = -std=c++2a -Wall -Wextra -O3 -march=native
 
 builddir = .build
 
 rule CXX
   description = CXX $in
   depfile     = $out.d
-  command     = g++ -MD -MF $out.d -x c++ $CXXFLAGS -c $in -o $out
+  command     = g++ -MD -MF $out.d -x c++ $INCLUDES $CXXFLAGS -c $in -o $out
 
 rule LINK
   description = LINK $out
