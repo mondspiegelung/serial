@@ -62,7 +62,6 @@ inline void to_utf8(char32_t codoepoint, std::string & destination)
 //		printf ("(%u, '%c')\n", cs, *p);
 	}
 
-
 	prepush {
 //		printf("PUSH\n");
 		stack.push_back(0);
@@ -215,16 +214,40 @@ inline void to_utf8(char32_t codoepoint, std::string & destination)
 
 	escaped_character = '\\' ["\/bfnrt] $ string_append_escape;
 
+	action save_be_surrogate {
+		uint32_t tmp = (integer_buffer >> 6) & 0x000ffc00;
+		tmp |= (integer_buffer & 0x0000003ff);
+		tmp += 0x10000;
+		to_utf8(tmp, token_buffer);
+	}
+	action save_le_surrogate {
+		uint32_t tmp = (integer_buffer >> 16) & 0x000003ff;
+		tmp |= ((integer_buffer << 10) & 0x0000ffc00);
+		tmp += 0x10000;
+		to_utf8(tmp, token_buffer);
+	}
+
 	unicode_escape =
 		'\\' 'u' > reset_integer_buffer
-		unicode_hexdigit{4} @ save_unicode;
+		( ( ( ( [0-9a-cefA-CEF][0-9a-fA-F]{3} )
+		    | ( [dD][0-7][0-9a-fA-F]{2} ) ) )
+		  $ unicode_escape_char
+		  % save_unicode
+		| ( ( [dD][89aAbB][0-9a-fA-F]{2} ) $ unicode_escape_char
+		    '\\' 'u' ( [dD][c-fC-F][0-9a-fA-F]{2} ) $ unicode_escape_char )
+		  % save_be_surrogate
+		| ( ( [dD][c-fC-F][0-9a-fA-F]{2} ) $ unicode_escape_char
+		    '\\' 'u' ( [dD][89aAbB][0-9a-fA-F]{2} ) $unicode_escape_char )
+		  % save_le_surrogate
+		)
+		;
 
 	string_character =
 		( ( (0x00 .. 0x7f) - ( '\\' | '"' ) )
 		| ( (0xc0 .. 0xdf) (0x80 .. 0xbf) )
 		| ( (0xe0 .. 0xef) (0x80 .. 0xbf){2} )
 		| ( (0xf0 .. 0xf7) (0x80 .. 0xbf){3} )
-		) @ string_append;
+		) $ string_append;
 
 	string_characters =
 		( string_character
@@ -260,20 +283,46 @@ inline void to_utf8(char32_t codoepoint, std::string & destination)
 		to_utf8(integer_buffer, std::get<std::string>(object_path.back()));
 	}
 
+	action label_save_be_surrogate {
+		uint32_t tmp = (integer_buffer >> 6) & 0x000ffc00;
+		tmp |= (integer_buffer & 0x0000003ff);
+		tmp += 0x10000;
+		to_utf8(tmp, std::get<std::string>(object_path.back()));
+	}
+	action label_save_le_surrogate {
+		uint32_t tmp = (integer_buffer >> 16) & 0x000003ff;
+		tmp |= ((integer_buffer << 10) & 0x0000ffc00);
+		tmp += 0x10000;
+		to_utf8(tmp, std::get<std::string>(object_path.back()));
+	}
+
 	label_unicode_hexdigit = [0-9a-fA-F] @ unicode_escape_char;
 
 	label_escaped_character = '\\' ["\/bfnrt] $ label_append_escape;
 
 	label_unicode_escape =
 		'\\' 'u' > reset_integer_buffer
-		unicode_hexdigit{4} @ label_save_unicode;
+		( ( ( ( [0-9a-cefA-CEF][0-9a-fA-F]{3} )
+		    | ( [dD][0-7][0-9a-fA-F]{2} ) ) )
+		  $ unicode_escape_char
+		  % label_save_unicode
+		| ( ( [dD][89aAbB][0-9a-fA-F]{2} ) $ unicode_escape_char
+		    '\\' 'u' ( [dD][c-fC-F][0-9a-fA-F]{2} )
+		    $ unicode_escape_char )
+		  % label_save_be_surrogate
+		| ( ( [dD][c-fC-F][0-9a-fA-F]{2} ) $ unicode_escape_char
+		    '\\' 'u' ( [dD][89aAbB][0-9a-fA-F]{2} )
+		    $ unicode_escape_char )
+		  % label_save_le_surrogate
+		)
+		;
 
 	label_string_character =
 		( ( (0x00 .. 0x7f) - ( '\\' | '"' ) )
 		| ( (0xc0 .. 0xdf) (0x80 .. 0xbf) )
 		| ( (0xe0 .. 0xef) (0x80 .. 0xbf){2} )
 		| ( (0xf0 .. 0xf7) (0x80 .. 0xbf){3} )
-		) @ label_append;
+		) $ label_append;
 
 	label_string_characters =
 		( label_string_character
@@ -406,10 +455,11 @@ void parser::parse_data(const char * buffer, size_t n, data_visitor & data)
 
 	if (cs <= json_error)
 	{
+		std::cerr << "cs = " << cs << ", pos = '" << p << "'\n";
 		throw std::runtime_error("Parse failed\n");
 	} else if ( cs >= json_first_final )
 	{
-		printf("Parse success, %u lines read\n", line_number - 1);
+		std::cerr << "Parse success, " << (line_number - 1) << " lines read\n";
 	}
 }
 
