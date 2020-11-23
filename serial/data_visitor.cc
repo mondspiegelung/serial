@@ -3,6 +3,8 @@
 #include <iostream>
 #include <iomanip>
 
+#include "util/fp_convert.h"
+
 namespace serial {
 
 void printing_visitor::print_path(std::ostream & out, const path & object_path)
@@ -108,9 +110,9 @@ void value::print(std::ostream & out,
 		out << std::get<uint64_t>(datum);
 	} else if (std::holds_alternative<double>(datum))
 	{
-		out << std::setprecision(std::numeric_limits<double>::digits10 + 1)
-		    << std::scientific
-		    << std::get<double>(datum);
+		char buffer[30];
+		size_t n = util::fp_convert(std::get<double>(datum), buffer);
+		out.write(buffer, n);
 	} else if (std::holds_alternative<bool>(datum))
 	{
 		out << std::boolalpha
