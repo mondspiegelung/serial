@@ -207,15 +207,15 @@ static constexpr decomposed powers_ten[] = {
 
 static decomposed find_cachedpow10(int exp, int* k)
 {
-    static constexpr double one_log_ten = 0.30102999566398114;
+	// note: 15051499783/50000000000 is an exact fraction of this
+	static constexpr double one_log_ten = 0.30102999566398114;
 
-    int approx = -(exp + npowers) * one_log_ten;
-    int idx = (approx - firstpower) / steppowers;
+	int approx = -(exp + npowers) * one_log_ten;
+	int idx = (approx - firstpower) / steppowers;
 
-#if 1
 	int current = exp + powers_ten[idx].exp + 64;
 
-    while (current < expmin)
+	while (current < expmin)
 	{
 		++idx;
 		current = exp + powers_ten[idx].exp + 64;
@@ -230,25 +230,6 @@ static decomposed find_cachedpow10(int exp, int* k)
 	*k = (firstpower + idx * steppowers);
 
 	return powers_ten[idx];
-#else
-    while(1) {
-        int current = exp + powers_ten[idx].exp + 64;
-
-        if(current < expmin) {
-            idx++;
-            continue;
-        }
-
-        if(current > expmax) {
-            idx--;
-            continue;
-        }
-
-        *k = (firstpower + idx * steppowers);
-
-        return powers_ten[idx];
-    }
-#endif
 }
 
 typedef unsigned __int128 uint128_t;
