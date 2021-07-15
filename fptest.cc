@@ -23,6 +23,23 @@ void stress_test()
 int main()
 {
 	std::initializer_list<double> values = {
+		1.23456e0,
+		1.23456e1,
+		1.23456e2,
+		1.23456e3,
+		1.23456e4,
+		1.23456e5,
+		1.23456e6,
+		1.23456e7,
+		1.23456e8,
+		1.23456e9,
+		1.23456e10,
+		1.23456e11,
+		1.23456e12,
+		1.23456e13,
+		1.23456e14,
+		1.23456e15,
+		1.23456e16,
 		16384,
 		3.14159,
 		1e-309,
@@ -38,14 +55,21 @@ int main()
 	              "your compiler is no longer rounding 1/2 the smallest "
 	              "representable subnormal value away from zero");
 
+	constexpr size_t buflen = 64;
+
 	for (const auto & v : values)
 	{
-		char result[30];
-		unsigned n = util::fp_convert(v, result);
+		char printf_result[buflen];
+		char conv_result[buflen];
 
-		result[n] = '\0';
+		unsigned printf_n = snprintf(printf_result, buflen, "%g", v);
+		unsigned conv_n = util::fp_convert(v, conv_result);
 
-		printf("%20g %20s (%u)\n", v, result, n);
+		conv_result[conv_n] = '\0';
+
+		printf("%20s (%u) %20s (%u)\n",
+		       printf_result, printf_n,
+		       conv_result, conv_n);
 	}
 
 	stress_test();
