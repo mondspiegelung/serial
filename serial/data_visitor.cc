@@ -120,60 +120,68 @@ void value::print(std::ostream & out,
 	} else if (std::holds_alternative<std::nullptr_t>(datum))
 	{
 		out << "null";
-	} else if (std::holds_alternative<empty_array>(datum))
-	{
-		out << "[ ]";
 	} else if (std::holds_alternative<array_ptr_type>(datum))
 	{
 		const array_type & a = *std::get<array_ptr_type>(datum);
-		out << "[\n";
 
-		auto i = a.begin();
-
-		if (i != a.end())
+		if (a.empty())
 		{
-			i->print(out, indent + 1);
-			++i;
-		}
-
-		for (; i != a.end(); ++i)
+			out << "[ ]";
+		} else
 		{
-			out << ",\n";
-			i->print(out, indent + 1);
+			out << "[\n";
+
+			auto i = a.begin();
+
+			if (i != a.end())
+			{
+				i->print(out, indent + 1);
+				++i;
+			}
+
+			for (; i != a.end(); ++i)
+			{
+				out << ",\n";
+				i->print(out, indent + 1);
+			}
+
+			out << '\n';
+
+			out << std::string(indent, '\t') << "]";
 		}
-
-		out << '\n';
-
-		out << std::string(indent, '\t') << "]";
-	} else if (std::holds_alternative<empty_object>(datum))
-	{
-		out << "{ }";
 	} else if (std::holds_alternative<object_ptr_type>(datum))
 	{
 		const object_type & o = *std::get<object_ptr_type>(datum);
-		out << "{\n";
 
-		auto i = o.begin();
-
-		if (i != o.end())
+		if (o.empty())
 		{
-			out << std::string(indent + 1, '\t') << '"' << i->first
-			    << "\": ";
-			i->second.print(out, indent + 1, false);
-			++i;
-		}
-
-		for (; i != o.end(); ++i)
+			out << "{ }";
+		} else
 		{
-			out << ",\n" << std::string(indent + 1, '\t')
-			    << '"' << i->first << "\": ";
+			out << "{\n";
 
-			i->second.print(out, indent + 1, false);
+			auto i = o.begin();
+
+			if (i != o.end())
+			{
+				out << std::string(indent + 1, '\t') << '"' << i->first
+					<< "\": ";
+				i->second.print(out, indent + 1, false);
+				++i;
+			}
+
+			for (; i != o.end(); ++i)
+			{
+				out << ",\n" << std::string(indent + 1, '\t')
+					<< '"' << i->first << "\": ";
+
+				i->second.print(out, indent + 1, false);
+			}
+
+			out << '\n';
+
+			out << std::string(indent, '\t') << "}";
 		}
-
-		out << '\n';
-
-		out << std::string(indent, '\t') << "}";
 	}
 }
 

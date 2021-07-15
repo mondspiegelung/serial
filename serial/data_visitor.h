@@ -1,12 +1,14 @@
 #ifndef DATA_VISITOR_H
 #define DATA_VISITOR_H 1
 
+#include <cstdint>
+
 #include <iosfwd>
 #include <vector>
 #include <variant>
 #include <memory>
 #include <unordered_map>
-#include <cstdint>
+#include <stdexcept>
 
 namespace serial {
 
@@ -93,10 +95,60 @@ struct value
 	             bool,
 	             std::nullptr_t,
 	             string_type,
-	             empty_array,
 	             std::shared_ptr<array_type>,
-	             empty_object,
 	             std::shared_ptr<object_type>> datum;
+
+	bool is_signed() const
+		{ return std::holds_alternative<int64_t>(datum); }
+
+	bool is_unsigned() const
+		{ return std::holds_alternative<uint64_t>(datum); }
+
+	bool is_double() const
+		{ return std::holds_alternative<double>(datum); }
+
+	bool is_bool() const
+		{ return std::holds_alternative<double>(datum); }
+
+	bool is_null() const
+		{ return std::holds_alternative<std::nullptr_t>(datum); }
+
+	bool is_string() const
+		{ return std::holds_alternative<std::string>(datum); }
+
+	bool is_array() const
+		{ return std::holds_alternative<array_ptr_type>(datum); }
+
+	bool is_object() const
+		{ return std::holds_alternative<object_ptr_type>(datum); }
+
+	object_ptr_type get_object() {
+		if ( ! is_object() )
+			throw std::runtime_error("get_object called on non-object datum");
+
+		return std::get<object_ptr_type>(datum);
+	}
+
+	array_ptr_type get_array() {
+		if ( ! is_array() )
+			throw std::runtime_error("get_object called on non-array datum");
+
+		return std::get<array_ptr_type>(datum);
+	}
+
+	double get_double() {
+		if ( ! is_double() )
+			throw std::runtime_error("get_object called on non-double datum");
+
+		return std::get<double>(datum);
+	}
+
+	std::string get_string() {
+		if ( ! is_string() )
+			throw std::runtime_error("get_object called on non-string datum");
+
+		return std::get<std::string>(datum);
+	}
 
 	void print(std::ostream & out,
 	           unsigned indent = 0,
@@ -147,16 +199,16 @@ class value_store : public value, public data_visitor
 		return current;
 	}
 
-	void add_datum(const path & object_path, const empty_array & a) override
+	void add_datum(const path & object_path, const empty_array &) override
 	{
 		value * current = walk_path(object_path);
-		current->datum = a;
+		current->datum.emplace<array_ptr_type>(new array_type);
 	}
 
-	void add_datum(const path & object_path, const empty_object & o) override
+	void add_datum(const path & object_path, const empty_object &) override
 	{
 		value * current = walk_path(object_path);
-		current->datum = o;
+		current->datum.emplace<object_ptr_type>(new object_type);
 	}
 
 	void add_datum(const path & object_path, std::nullptr_t) override
